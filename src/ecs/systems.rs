@@ -37,7 +37,7 @@ pub fn build_update_chimera_spawners() -> Box<dyn Schedulable>  {
                 spawner.tick_ms += dt_ms as i32;
                 if spawner.tick_ms >= spawner.cooldown_ms {
                     spawner.tick_ms -= spawner.cooldown_ms;
-                    println!("spawn chimera {:?} - {:?}", spawner.tick_ms, dt_ms);
+                    //println!("spawn chimera {:?} - {:?}", spawner.tick_ms, dt_ms);
 
                     let entities: &[Entity] = command_buffer.insert(
                         ((Model(1)), Chimera),
@@ -46,7 +46,7 @@ pub fn build_update_chimera_spawners() -> Box<dyn Schedulable>  {
                         ],
                     );
 
-                    emit_event.push(EventSpawn{
+                    emit_event.push(LunaciaWorldEvent::EventSpawn{
                         frame: 0,
                         id: entities[0].index(),
                         model: 1,
@@ -86,14 +86,21 @@ pub fn build_update_moving() -> Box<dyn Schedulable>  {
 
 pub fn build_update_new_pos() -> Box<dyn Schedulable>  {
     SystemBuilder::new("update_moving")
+        .write_resource::<EmitEventResource>()
         .with_query(<(Write<Pos>, Read<NewPos>)>::query())
-        .build(move |command_buffer, mut world, (), query| {
-            //res1.0 = res2.0.clone(); // Write the mutable resource from the immutable resource
-            //let dt_time = res0.fixed_time_ms  as f64 * 0.001;
+        .build(move |command_buffer, mut world, (res0), query| {
+            let emit_event = &mut res0.0;
             for (mut entity, (mut pos, newpos)) in query.iter_entities_mut(&mut world) {
                 pos.0 = newpos.0;
                 pos.1 = newpos.1;
                 command_buffer.remove_component::<NewPos>(entity);
+
+                emit_event.push(LunaciaWorldEvent::EventRelocation{
+                    frame: 0,
+                    id: entity.index(),
+                    tx: pos.0,
+                    ty: pos.1,
+                });
             }
         })
 }
@@ -113,7 +120,7 @@ pub fn build_update_follow_paths() -> Box<dyn Schedulable>  {
                         command_buffer.remove_component::<FollowPath>(entity);
                         command_buffer.remove_component::<Moving>(entity);
                     } else if pos.distance(&Pos(fp.tx, fp.ty)) <= 1{
-                        println!("{:?},{:?} -> {:?},{:?} Reach target", pos.0, pos.1, fp.tx, fp.ty);
+                        //println!("{:?},{:?} -> {:?},{:?} Reach target", pos.0, pos.1, fp.tx, fp.ty);
                         command_buffer.remove_component::<FollowPath>(entity);
                         command_buffer.remove_component::<Moving>(entity);
                     } else {
@@ -124,7 +131,7 @@ pub fn build_update_follow_paths() -> Box<dyn Schedulable>  {
                             |&p| p == goal);
                         match result {
                             Some((paths, cost)) => {
-                                println!("{:?},{:?} -> {:?},{:?} Path found length: {:?}. cost: {:?}", pos.0, pos.1, goal.0, goal.1, paths.len(), cost);
+                                //println!("{:?},{:?} -> {:?},{:?} Path found length: {:?}. cost: {:?}", pos.0, pos.1, goal.0, goal.1, paths.len(), cost);
 
                                 mv.vx = paths[1].0 - paths[0].0;
                                 mv.vy = paths[1].1 - paths[0].1;
@@ -132,7 +139,7 @@ pub fn build_update_follow_paths() -> Box<dyn Schedulable>  {
                                 mv.maxstep = 1000;
                             }
                             None => {
-                                println!("No path found");
+                                //println!("No path found");
                                 command_buffer.remove_component::<FollowPath>(entity);
                                 command_buffer.remove_component::<Moving>(entity);
                             }

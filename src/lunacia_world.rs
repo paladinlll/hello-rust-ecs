@@ -17,7 +17,7 @@ use legion::prelude::*;
 use super::*;
 use crate::ecs::components::{Pos, ChimeraSpawner};
 use crate::ecs::submap::{TileMap};
-use crate::ecs::types::{TileMapResource, GameConfigResource, QuadrantDataHashMapResource, EventSpawn, EmitEventResource};
+use crate::ecs::types::{TileMapResource, GameConfigResource, QuadrantDataHashMapResource, LunaciaWorldEvent, EmitEventResource};
 use crate::ecs::systems;
 
 #[derive(Message)]
@@ -85,7 +85,7 @@ impl ArbiterService for LunaciaWorldActor {
         }
 
         resources.insert(GameConfigResource{fixed_time_ms: self.fixed_time_step, map_width: 390, map_height: 390});
-        resources.insert(EmitEventResource(Vec::<EventSpawn>::new()));
+        resources.insert(EmitEventResource(Vec::<LunaciaWorldEvent>::new()));
         self.resources = Some(resources);
 
         let universe = Universe::new();
@@ -114,7 +114,16 @@ impl ArbiterService for LunaciaWorldActor {
             if let Some(p) = &mut _resources.get_mut::<EmitEventResource>() {
                 let evts = &mut p.0;
                 if evts.len() > 0 {
-                    println!("EventSpawn x {:?}", evts.len());
+                    for evt in evts.iter() {
+                        match evt {
+                            LunaciaWorldEvent::EventSpawn{frame, id, model, tx, ty} => {
+                                println!("EventSpawn: {:?} {:?} {:?} {:?},{:?}", frame, id, model, tx, ty);
+                            },
+                            LunaciaWorldEvent::EventRelocation{frame, id, tx, ty} => {
+                                println!("EventRelocation: {:?} {:?} {:?},{:?}", frame, id, tx, ty);
+                            },
+                        }
+                    }
                     evts.clear();
                 }
             };
