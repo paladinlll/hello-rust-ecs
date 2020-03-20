@@ -51,6 +51,7 @@ pub struct LunaciaWorldActor {
     resources: Option<Resources>,
     inputs: Vec<PingWorld>,
     outputs: Vec<WorldPong>,
+    inputing: bool,
 }
 
 impl Actor for LunaciaWorldActor {
@@ -69,6 +70,7 @@ impl ArbiterService for LunaciaWorldActor {
             }
         }
         self.fixed_time_step = 200; 
+        self.inputing = true;
 
         let mut resources = Resources::default();
         let mut tile_map = TileMap::new(390, 390);
@@ -146,7 +148,23 @@ impl Handler<PingWorld> for LunaciaWorldActor {
     type Result = ();
  
     fn handle(&mut self, msg: PingWorld, ctx: &mut Context<Self>) {
-        self.inputs.push(msg);
+        if self.inputing {
+            if msg.data.len() > 1 {
+                let mut iter = msg.data.split_ascii_whitespace();
+                match iter.next() {
+                    Some("i") => {
+                        self.inputing = false;
+                        self.inputs.push(msg);
+                    },
+                    _ => {
+                        println!("skipped {:?}", msg.data);
+                    }
+                }
+            }
+        } else if msg.data.len() <= 1 {
+            self.inputing = true;
+            println!("inputing on");
+        }
     }
  }
 
@@ -154,8 +172,6 @@ impl Handler<UpdateWorld> for LunaciaWorldActor {
     type Result = ();
 
     fn handle(&mut self, _: UpdateWorld, ctx: &mut Context<Self>) {
-        //println!("UpdateWorld {:?}", self.number_of_updates);
-
         if let Some(resources) = &mut self.resources {
             if let Some(schedule) = &mut self.schedule {
                 if let Some(world) = &mut self.world {

@@ -29,8 +29,9 @@ impl Handler<PingWorld> for IOWorldActior {
  
     fn handle(&mut self, msg: PingWorld, ctx: &mut Context<Self>) {
          println!("Request PingWorld");
+
          let act = LunaciaWorldActor::from_registry();
-        act.do_send(PingWorld{data: msg.data});
+         act.do_send(PingWorld{data: msg.data});
     }
 }
 

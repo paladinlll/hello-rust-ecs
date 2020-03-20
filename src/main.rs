@@ -109,16 +109,18 @@ fn main() {
     let code = System::run(|| {
         Arbiter::new().exec_fn(|| {
             let io_actor = IOWorldActior::from_registry();
-            thread::spawn(move || loop {
-                let mut cmd = String::new();
-                if io::stdin().read_line(&mut cmd).is_err() {
-                    println!("error");
-                    return;
+            thread::spawn(move || {
+                loop {
+                    let mut cmd = String::new();
+                    if io::stdin().read_line(&mut cmd).is_err() {
+                        println!("error");
+                        return;
+                    }
+                    io_actor.do_send(PingWorld{data: cmd});
                 }
-                //let act = LunaciaWorldActor::from_registry();
-                
-                io_actor.do_send(PingWorld{data: cmd});
             });
         });
     });
+
+    // std::process::exit(0);
 }
