@@ -28,8 +28,8 @@ pub struct Moving{
     pub maxstep: u64,
 }
 
-// #[derive(Clone, Copy, Debug, PartialEq)]
-// struct Model(usize);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Model(pub usize);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Chimera;

@@ -17,7 +17,7 @@ use legion::prelude::*;
 use super::*;
 use crate::ecs::components::{Pos, ChimeraSpawner};
 use crate::ecs::submap::{TileMap};
-use crate::ecs::types::{TileMapResource, GameConfigResource, QuadrantDataHashMapResource};
+use crate::ecs::types::{TileMapResource, GameConfigResource, QuadrantDataHashMapResource, EventSpawn, EmitEventResource};
 use crate::ecs::systems;
 
 #[derive(Message)]
@@ -44,7 +44,7 @@ pub struct LunaciaWorldActor {
     running_time_ms: u128,
     accumulated_time: u128,
     fixed_time_step: u64,
-    number_of_updates: u128,
+    number_of_updates: u32,
     universe: Option::<Universe>,
     world: Option::<World>,
     schedule: Option<Schedule>,
@@ -85,6 +85,7 @@ impl ArbiterService for LunaciaWorldActor {
         }
 
         resources.insert(GameConfigResource{fixed_time_ms: self.fixed_time_step, map_width: 390, map_height: 390});
+        resources.insert(EmitEventResource(Vec::<EventSpawn>::new()));
         self.resources = Some(resources);
 
         let universe = Universe::new();
@@ -109,6 +110,16 @@ impl ArbiterService for LunaciaWorldActor {
         // update positions using a system
         let set_quadrant_data_hash_map = systems::build_set_quadrant_data_hash_map();
 
+        let thread_local_example = Box::new(|world: &mut World, _resources: &mut Resources| {
+            if let Some(p) = &mut _resources.get_mut::<EmitEventResource>() {
+                let evts = &mut p.0;
+                if evts.len() > 0 {
+                    println!("EventSpawn x {:?}", evts.len());
+                    evts.clear();
+                }
+            };
+        });
+
         let mut schedule = Schedule::builder()
             .add_system(set_quadrant_data_hash_map)
             .add_system(update_chimera_state)
@@ -121,7 +132,7 @@ impl ArbiterService for LunaciaWorldActor {
             .flush()
             // a thread local system or function will wait for all previous systems to finish running,
             // and then take exclusive access of the world.
-            //.add_thread_local_fn(thread_local_example)
+            .add_thread_local_fn(thread_local_example)
             .build();
 
         self.schedule = Some(schedule);

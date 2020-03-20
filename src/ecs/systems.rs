@@ -28,9 +28,11 @@ use legion::prelude::*;
 pub fn build_update_chimera_spawners() -> Box<dyn Schedulable>  {
     SystemBuilder::new("update_chimera_spawners")
         .read_resource::<GameConfigResource>()
+        .write_resource::<EmitEventResource>()
         .with_query(<(Read<Pos>, Write<ChimeraSpawner>)>::query())
-        .build(move |command_buffer, mut world, (res0), query| {
+        .build(move |command_buffer, mut world, (res0, res1), query| {
             let dt_ms = res0.fixed_time_ms;
+            let emit_event = &mut res1.0;
             for (pos, mut spawner) in query.iter_mut(&mut world) {
                 spawner.tick_ms += dt_ms as i32;
                 if spawner.tick_ms >= spawner.cooldown_ms {
@@ -38,86 +40,23 @@ pub fn build_update_chimera_spawners() -> Box<dyn Schedulable>  {
                     println!("spawn chimera {:?} - {:?}", spawner.tick_ms, dt_ms);
 
                     let entities: &[Entity] = command_buffer.insert(
-                        ((), Chimera),
+                        ((Model(1)), Chimera),
                         vec![
-                            (Pos(pos.0, pos.1), Vel(1, 0), ChimeraState{state: 0})
+                            (Pos(pos.0, pos.1), Vel(0, 0), ChimeraState{state: 0})
                         ],
                     );
+
+                    emit_event.push(EventSpawn{
+                        frame: 0,
+                        id: entities[0].index(),
+                        model: 1,
+                        tx: pos.0,
+                        ty: pos.1,
+                    });
                 }
             }
         })
 }
-
-// pub fn build_update_chimeras_as_boid() -> Box<dyn Schedulable>  {
-//     SystemBuilder::new("update_chimeras")
-//         .read_resource::<GameConfigResource>()
-//         .read_resource::<QuadrantDataHashMapResource>()
-//         .with_query(<(Read<Pos>, Write<Vel>)>::query()
-//             .filter(tag::<Chimera>()))
-//         .build(|_, mut world, (res0, res1), query| {
-//             //res1.0 = res2.0.clone(); // Write the mutable resource from the immutable resource
-//             let dt_time = res0.fixed_time_ms  as f64 * 0.001;
-//             let mw = res0.map_width as f32;
-//             let mh = res0.map_height as f32;
-//             let hm = &res1.0;
-
-//             for (mut pos, mut vel) in query.iter_mut(&mut world) {
-//                 let mut v_pos = Vector2::new(pos.0 as f64, pos.1 as f64);
-                
-
-//                 let hash_map_key = get_position_hash_map_key(pos.0, pos.1);
-//                 let mut group_size = 0;
-//                 let mut v_center = Vector2::new(0.0, 0.0);
-//                 let mut v_avoid = Vector2::new(0.0, 0.0);
-//                 if let Some(vec) = hm.get(&hash_map_key) {
-//                     for &x in vec {
-//                         let dir = v_pos - x;
-//                         let n_distance = dir.magnitude();
-//                         if n_distance < 3.0 {
-//                             v_center += x;
-//                             group_size += 1;
-
-//                             if n_distance < 1.0 {
-//                                 v_avoid += dir;
-//                             }
-//                         }
-//                     }
-//                     //println!("chunk {:?} - neighbor {:?}", hash_map_key, vec.len());
-//                 }
-
-//                 if group_size > 0 {
-//                     v_center = v_center / group_size as f64;
-//                     v_center += v_avoid;
-//                     let mut dir = v_center - v_pos;
-//                     let n_distance = dir.magnitude();
-//                     if n_distance > 0.0 { 
-//                         dir.normalize();
-//                     } else {
-//                         dir = Vector2::new(vel.0 as f64, vel.1 as f64);
-//                         dir.normalize();
-//                     }
-
-//                     if dir.x.abs() > dir.y.abs() {
-//                         if dir.x > 0.0  {
-//                             vel.0 = 1;
-//                             vel.1 = 0;
-//                         } else {
-//                             vel.0 = -1;
-//                             vel.1 = 0;
-//                         }
-//                     } else {
-//                         if dir.y > 0.0  {
-//                             vel.0 = 0;
-//                             vel.1 = 1;
-//                         } else {
-//                             vel.0 = 0;
-//                             vel.1 = -1;
-//                         }
-//                     }
-//                 }
-//             }
-//         })
-// }
 
 pub fn build_update_moving() -> Box<dyn Schedulable>  {
     SystemBuilder::new("update_moving")
