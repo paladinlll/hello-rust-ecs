@@ -10,11 +10,15 @@ use actix_files as fs;
 use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 use std::{io, thread};
+use std::collections::HashMap;
 
 use legion::prelude::*;
 
 use super::*;
-// use io_world::{IOWorldActior};
+use crate::ecs::components::{Pos, ChimeraSpawner};
+use crate::ecs::submap::{TileMap};
+use crate::ecs::types::{TileMapResource, GameConfigResource, QuadrantDataHashMapResource};
+use crate::ecs::systems;
 
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -39,10 +43,12 @@ pub struct LunaciaWorldActor {
     up_time: u128,
     running_time_ms: u128,
     accumulated_time: u128,
-    fixed_time_step: u32,
+    fixed_time_step: u64,
     number_of_updates: u128,
     universe: Option::<Universe>,
     world: Option::<World>,
+    schedule: Option<Schedule>,
+    resources: Option<Resources>,
     inputs: Vec<PingWorld>,
     outputs: Vec<WorldPong>,
 }
@@ -64,12 +70,59 @@ impl ArbiterService for LunaciaWorldActor {
         }
         self.fixed_time_step = 200; 
 
+        let mut resources = Resources::default();
+        let mut tile_map = TileMap::new(390, 390);
+        match tile_map.load_map() {
+            Ok(v) => {
+                resources.insert(TileMapResource(tile_map));
+            },
+            Err(e) => {
+                println!("error parsing header: {:?}", e);
+                panic!();
+            }
+        }
+
+        resources.insert(GameConfigResource{fixed_time_ms: self.fixed_time_step, map_width: 390, map_height: 390});
+        self.resources = Some(resources);
 
         let universe = Universe::new();
         let mut world = universe.create_world();
 
+        world.insert(
+            (),
+            vec![
+                (Pos(5, 5), ChimeraSpawner{ count: 1, cooldown_ms: 20001, tick_ms: 20000}),
+            ],
+        );
+
         self.universe = Some(universe);
         self.world = Some(world);
+
+        let update_chimera_spawners = systems::build_update_chimera_spawners();
+        let update_positions = systems::build_update_moving();
+        let update_follow_paths = systems::build_update_follow_paths();
+        let update_chimera_state = systems::build_update_chimera_state();
+        let update_new_pos = systems::build_update_new_pos();
+
+        // update positions using a system
+        let set_quadrant_data_hash_map = systems::build_set_quadrant_data_hash_map();
+
+        let mut schedule = Schedule::builder()
+            .add_system(set_quadrant_data_hash_map)
+            .add_system(update_chimera_state)
+            //.add_system(update_chimeras_as_boid)
+            .add_system(update_follow_paths)
+            .add_system(update_positions)
+            .add_system(update_chimera_spawners)
+            .add_system(update_new_pos)
+            // This flushes all command buffers of all systems.
+            .flush()
+            // a thread local system or function will wait for all previous systems to finish running,
+            // and then take exclusive access of the world.
+            //.add_thread_local_fn(thread_local_example)
+            .build();
+
+        self.schedule = Some(schedule);
 
         println!("LunaciaWorldActor Service started");
    }
@@ -99,42 +152,55 @@ impl Handler<PingWorld> for LunaciaWorldActor {
 
 impl Handler<UpdateWorld> for LunaciaWorldActor {
     type Result = ();
- 
+
     fn handle(&mut self, _: UpdateWorld, ctx: &mut Context<Self>) {
         //println!("UpdateWorld {:?}", self.number_of_updates);
 
-        if self.inputs.len() > 0 {
-            println!("Got {:?} inputs", self.inputs.len());
-            for input in &self.inputs {
-                println!("input: {:?}", input.data);
-            }
-            
-            self.inputs.clear();
+        if let Some(resources) = &mut self.resources {
+            if let Some(schedule) = &mut self.schedule {
+                if let Some(world) = &mut self.world {
+                    if self.inputs.len() > 0 {
+                        println!("Got {:?} inputs", self.inputs.len());
+                        for input in &self.inputs {
+                            println!("input: {:?}", input.data);
+                        }
+                        
+                        self.inputs.clear();
 
-            let act = IOWorldActior::from_registry();
-            act.do_send(WorldPong);
-        }
+                        let act = IOWorldActior::from_registry();
+                        act.do_send(WorldPong);
+                    }
 
-        let mut now_ms : u128 = 0;
-        match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-            Ok(n) => {
-                now_ms = n.as_millis();
-            },
-            Err(_) => {
-                panic!("SystemTime before UNIX EPOCH!")
-            }
-        }
-        let dt_time = (now_ms - self.up_time) - self.running_time_ms;
-        //println!("dt_time {:?}", dt_time);
+                    let mut now_ms : u128 = 0;
+                    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                        Ok(n) => {
+                            now_ms = n.as_millis();
+                        },
+                        Err(_) => {
+                            panic!("SystemTime before UNIX EPOCH!")
+                        }
+                    }
+                    let dt_time = (now_ms - self.up_time) - self.running_time_ms;
+                    //println!("dt_time {:?}", dt_time);
 
-        self.running_time_ms += dt_time;
-        self.accumulated_time += dt_time;
+                    self.running_time_ms += dt_time;
+                    self.accumulated_time += dt_time;
 
-        while self.accumulated_time >= self.fixed_time_step as u128 {
+                    while self.accumulated_time >= self.fixed_time_step as u128 {
+                        let mut quadrant_data = QuadrantDataHashMapResource(HashMap::new());
 
-            self.accumulated_time -= self.fixed_time_step as u128;
-            self.number_of_updates += 1;
-        }
+                        resources.insert(quadrant_data);
+                        
+                        schedule.execute(world, resources);
+
+                        let hm : Option<QuadrantDataHashMapResource> = resources.remove();
+
+                        self.accumulated_time -= self.fixed_time_step as u128;
+                        self.number_of_updates += 1;
+                    }
+                };
+            };
+        };
  
         let addr = ctx.address();
 

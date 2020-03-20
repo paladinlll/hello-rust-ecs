@@ -17,6 +17,9 @@ mod lunacia_world;
 
 use crate::io_world::{IOWorldActior};
 mod io_world;
+
+mod ecs;
+
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout

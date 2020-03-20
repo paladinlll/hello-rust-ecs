@@ -878,6 +878,7 @@ dependencies = [
  "env_logger",
  "futures",
  "legion",
+ "num-traits",
 ]
 
 [[package]]
