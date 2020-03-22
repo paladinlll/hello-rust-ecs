@@ -15,7 +15,8 @@ use std::collections::HashMap;
 use legion::prelude::*;
 
 use super::*;
-use crate::ecs::components::{Pos, ChimeraSpawner};
+use crate::ecs::components::{*};
+
 use crate::ecs::submap::{TileMap};
 use crate::ecs::types::{TileMapResource, GameConfigResource, QuadrantDataHashMapResource, LunaciaWorldEvent, EmitEventResource};
 use crate::ecs::systems;
@@ -44,7 +45,6 @@ pub struct LunaciaWorldActor {
     running_time_ms: u128,
     accumulated_time: u128,
     fixed_time_step: u64,
-    number_of_updates: u32,
     universe: Option::<Universe>,
     world: Option::<World>,
     schedule: Option<Schedule>,
@@ -84,18 +84,39 @@ impl ArbiterService for LunaciaWorldActor {
             }
         }
 
-        resources.insert(GameConfigResource{fixed_time_ms: self.fixed_time_step, map_width: 390, map_height: 390});
+        resources.insert(GameConfigResource{
+            fixed_time_ms: self.fixed_time_step, 
+            number_of_updates: 0,
+            map_width: 390, 
+            map_height: 390
+        });
         resources.insert(EmitEventResource(Vec::<LunaciaWorldEvent>::new()));
         self.resources = Some(resources);
 
         let universe = Universe::new();
         let mut world = universe.create_world();
 
+        //Init static building
         world.insert(
-            (),
+            (BuildingModel(BuildingModelType::ResourceNode as i32), Static,),
             vec![
-                (Pos(5, 5), ChimeraSpawner{ count: 1, cooldown_ms: 20001, tick_ms: 20000}),
-            ],
+                (LandPos(21, 21),),
+            ]
+        );
+
+        // world.insert(
+        //     (),
+        //     vec![
+        //         (LandPos(5, 5), ChimeraSpawner{ count: 1, cooldown_ms: 20001, tick_ms: 20000}),
+        //     ],
+        // );
+
+        // TODO load state
+        world.insert(
+            (UnitModel(UnitModelType::Axie as i32),),
+            vec![
+                (LandPos(5, 5), GatherResourceGoal{step:0, home_pos:LandPos(5, 5), target_pos:LandPos(21, 21)},)
+            ]
         );
 
         self.universe = Some(universe);
@@ -127,6 +148,9 @@ impl ArbiterService for LunaciaWorldActor {
                     evts.clear();
                 }
             };
+            if let Some(conf) = &mut _resources.get_mut::<GameConfigResource>() {
+                conf.number_of_updates += 1;
+            }
         });
 
         let mut schedule = Schedule::builder()
@@ -137,6 +161,12 @@ impl ArbiterService for LunaciaWorldActor {
             .add_system(update_positions)
             .add_system(update_chimera_spawners)
             .add_system(update_new_pos)
+
+            .add_system(systems::build_gather_resource_goals())
+            .add_system(systems::build_gather_resource_actions())
+            .add_system(systems::build_release_resource_actions())
+
+            
             // This flushes all command buffers of all systems.
             .flush()
             // a thread local system or function will wait for all previous systems to finish running,
@@ -232,7 +262,6 @@ impl Handler<UpdateWorld> for LunaciaWorldActor {
                         let hm : Option<QuadrantDataHashMapResource> = resources.remove();
 
                         self.accumulated_time -= self.fixed_time_step as u128;
-                        self.number_of_updates += 1;
                     }
                 };
             };

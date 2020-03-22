@@ -1,23 +1,25 @@
-
+use std::collections::VecDeque;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Pos(pub i32, pub i32);
+pub struct LandPos(pub i32, pub i32);
 
-impl Pos {
+impl LandPos {
     pub fn get_hash_map_key(&self) -> i32  {
         let ret = (self.0 / 3) as i32 + 1000 * ((self.0 / 3) as i32);
         (ret)
     }
 
-    pub fn distance(&self, other: &Pos) -> u32 {
+    pub fn distance(&self, other: &LandPos) -> u32 {
         ((self.0 - other.0).abs() + (self.1 - other.1).abs()) as u32
       }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NewPos(pub i32, pub i32);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vel(pub i32, pub i32);
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Moving{
     pub vx: i32,
@@ -28,8 +30,34 @@ pub struct Moving{
     pub maxstep: u64,
 }
 
+impl Moving {
+    pub fn new() -> Self {
+        Moving {vx: 0, vy: 0, speed: 2, cost: 1, step: 0, maxstep: 0}
+    }
+}
+
+pub enum UnitModelType {
+    None,
+    Axie,
+    Chimera,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Model(pub usize);
+pub struct UnitModel(pub i32);
+
+pub enum BuildingModelType {
+    None,
+    ResourceNode,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BuildingModel(pub i32);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ResourceNode;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Static;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Chimera;
@@ -55,4 +83,78 @@ pub struct ChimeraSpawner {
     pub count: i32,
     pub cooldown_ms: i32,
     pub tick_ms: i32,
+}
+
+
+
+pub enum WorldStateType {
+    None,
+    GatherResource,
+    GatherResourceDone,
+    ReleaseResource,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WorldState(pub i32, pub i32);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GAction{
+    //pub id: i32,
+    //pub target: Option<LandPos>,
+    //pub cost: u32,
+    pub duration_ms: u32,
+    pub pre_conditions: WorldState,
+    pub after_effects: WorldState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GActionGatherResource;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GActionReleaseResource;
+
+impl GAction {
+    pub fn new_gather_resource_action() -> Self {
+        let pre_conditions = WorldState(WorldStateType::GatherResource as i32, 1);
+        let after_effects = WorldState(WorldStateType::GatherResourceDone as i32, 1);
+        GAction {
+            duration_ms: 5000,
+            pre_conditions: pre_conditions,
+            after_effects: after_effects,
+        }
+    }
+
+    pub fn new_release_resource_action() -> Self {
+        let pre_conditions = WorldState(WorldStateType::GatherResourceDone as i32, 1);
+        let after_effects = WorldState(WorldStateType::ReleaseResource as i32, 1);
+
+        GAction {
+            duration_ms: 1000,
+            pre_conditions: pre_conditions,
+            after_effects: after_effects,
+        }
+    }
+}
+
+// #[derive(Clone, Debug, PartialEq)]
+// pub struct GAgent{
+//     pub action_queue: VecDeque<GAction>,
+//     pub current_action: Option<GAction>,
+// }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GatherResourceAction {
+    pub action: GAction
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ReleaseResourceAction {
+    pub action: GAction
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GatherResourceGoal {
+    pub step: i32,
+    pub home_pos: LandPos,
+    pub target_pos: LandPos
 }

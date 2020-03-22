@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct GameConfigResource {
+    pub number_of_updates: u32,
     pub fixed_time_ms: u64,
     pub map_width: usize,
     pub map_height: usize
