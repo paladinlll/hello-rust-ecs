@@ -11,6 +11,7 @@ use actix_web::{middleware, web, App, Error, HttpRequest, HttpResponse, HttpServ
 use actix_web_actors::ws;
 use std::{io, thread};
 use std::collections::HashMap;
+use std::collections::VecDeque;
 
 use legion::prelude::*;
 
@@ -18,7 +19,7 @@ use super::*;
 use crate::ecs::components::{*};
 
 use crate::ecs::submap::{TileMap};
-use crate::ecs::types::{TileMapResource, GameConfigResource, QuadrantDataHashMapResource, LunaciaWorldEvent, EmitEventResource};
+use crate::ecs::types::{*};
 use crate::ecs::systems;
 
 #[derive(Message)]
@@ -49,7 +50,7 @@ pub struct LunaciaWorldActor {
     world: Option::<World>,
     schedule: Option<Schedule>,
     resources: Option<Resources>,
-    inputs: Vec<PingWorld>,
+    inputs: Vec<PlayerInputRequest>,
     outputs: Vec<WorldPong>,
     inputing: bool,
 }
@@ -91,6 +92,7 @@ impl ArbiterService for LunaciaWorldActor {
             map_height: 390
         });
         resources.insert(EmitEventResource(Vec::<LunaciaWorldEvent>::new()));
+        resources.insert(QuadrantDataHashMapResource(HashMap::new()));
         self.resources = Some(resources);
 
         let universe = Universe::new();
@@ -113,9 +115,10 @@ impl ArbiterService for LunaciaWorldActor {
 
         // TODO load state
         world.insert(
-            (UnitModel(UnitModelType::Axie as i32),),
+            (Owner(1), UnitModel(UnitModelType::Axie as i32),),
             vec![
-                (LandPos(5, 5), GatherResourceGoal{step:0, home_pos:LandPos(5, 5), target_pos:LandPos(21, 21)},)
+                //(LandPos(5, 5), GatherResourceGoal{step:0, home_pos:LandPos(5, 5), target_pos:LandPos(21, 21)},)
+                (LandPos(5, 5), )
             ]
         );
 
@@ -132,6 +135,18 @@ impl ArbiterService for LunaciaWorldActor {
         let set_quadrant_data_hash_map = systems::build_set_quadrant_data_hash_map();
 
         let thread_local_example = Box::new(|world: &mut World, _resources: &mut Resources| {
+            // if let Some(p) = &mut _resources.get_mut::<PlayerInputResource>() {
+            //     let ins = &mut p.0;
+            //     //TODO quick verify valid input?
+            //     while let Some(inp) = &self.inputs.pop_front() {
+            //         //ins.push_back(*inp);
+            //     }
+            //     // let act = IOWorldActior::from_registry();
+            //     // act.do_send(WorldPong);
+            // }
+
+            
+
             if let Some(p) = &mut _resources.get_mut::<EmitEventResource>() {
                 let evts = &mut p.0;
                 if evts.len() > 0 {
@@ -148,6 +163,73 @@ impl ArbiterService for LunaciaWorldActor {
                     evts.clear();
                 }
             };
+
+            if let Some(p) = &mut _resources.get_mut::<QuadrantDataHashMapResource>() {
+                let hm = &mut p.0;
+                {
+                    let query = <(Write<PlayerInput>, Read<PlayerInputGetStateAroundLand>)>::query();
+                    for (mut pi, _) in query.iter_mut(world) {
+                        match &pi.status {
+                            0 => {
+                                pi.status += 1;
+                                for tfs in hm.values() {
+                                    for tf in tfs.iter() {
+                                        println!("State: {:?} - {:?},{:?}", tf.0, tf.1, tf.2);
+                                    }
+                                }
+                            },
+                            _ => ()
+                        }
+                    }
+                }
+
+                {
+                    let mut input_hm : HashMap <(u32, u32), PlayerInputAxieGatherResource> = HashMap::new();
+
+                    let query = <(Write<PlayerInput>, Read<PlayerInputAxie>, Read<PlayerInputAxieGatherResource>)>::query();
+                    for (mut pi, ax, gr) in query.iter_mut(world) {
+                        match &pi.status {
+                            0 => {
+                                pi.status += 1;
+                                input_hm.insert((pi.owner, ax.axie_index), *gr);
+                            },
+                            _ => ()
+                        }
+                    }
+
+                    for (key, val) in input_hm.iter() {
+                        let owner = Owner(key.0);
+                        let axie_query = <(Read<LandPos>)>::query()
+                            .filter(tag_value(&owner) & tag_value(&UnitModel(UnitModelType::Axie as i32)));
+                        let mut axie_found : Option<Entity> = None;
+                        for (mut axie_entity, (axie_pos)) in axie_query.iter_entities_mut(world) {
+                            if axie_entity.index() == key.1 {
+                                axie_found = Some(axie_entity);
+                            }
+                        }
+                        match axie_found {
+                            Some(entity) => {
+                                if world.get_component::<GGoal>(entity) == None {
+                                    world.add_component(entity, GatherResourceGoal{
+                                        step:0, 
+                                        home_pos:LandPos(5, 5), 
+                                        target_pos:LandPos(21, 21)}
+                                    );
+                                } else{
+                                    println!("Axie busing");
+                                }
+                                
+                            },
+                            None => {
+                                println!("Invalid axie input");
+                            }
+                        }
+                        //println!("key: {} val: {}", key, val);
+                    }
+                }
+                
+                hm.clear();
+            }
             if let Some(conf) = &mut _resources.get_mut::<GameConfigResource>() {
                 conf.number_of_updates += 1;
             }
@@ -166,6 +248,10 @@ impl ArbiterService for LunaciaWorldActor {
             .add_system(systems::build_gather_resource_actions())
             .add_system(systems::build_release_resource_actions())
 
+            //.add_system(systems::build_player_input_axie_gather_resource())
+
+            .add_system(systems::build_player_input_cleans())
+            
             
             // This flushes all command buffers of all systems.
             .flush()
@@ -198,22 +284,38 @@ impl Handler<PingWorld> for LunaciaWorldActor {
     type Result = ();
  
     fn handle(&mut self, msg: PingWorld, ctx: &mut Context<Self>) {
-        if self.inputing {
-            if msg.data.len() > 1 {
-                let mut iter = msg.data.split_ascii_whitespace();
-                match iter.next() {
-                    Some("i") => {
-                        self.inputing = false;
-                        self.inputs.push(msg);
-                    },
-                    _ => {
-                        println!("skipped {:?}", msg.data);
+        if msg.data.len() > 1 {
+            let mut iter = msg.data.split_ascii_whitespace();
+            match iter.next() {
+                Some("i") => {
+                    self.inputs.push(PlayerInputRequest::GetPlayerState {
+                        request_id: 0,
+                        owner: 1
+                    });
+                },
+                Some("g") => {
+                    let mut e_index = 0;
+                    if let Some(v_str) = iter.next() {
+                        if let Ok(v) = v_str.parse::<u32>() {
+                            e_index = v;
+                        }
                     }
+                    if e_index > 0 {
+                        println!("PlayerInputRequested {:?}", e_index);
+                        self.inputs.push(PlayerInputRequest::GatherResource {
+                            request_id: 0,
+                            owner: 1,
+                            axie_index: e_index
+                        });
+                    }
+
+                    self.inputing = false;
+                    
+                },
+                _ => {
+                    println!("skipped {:?}", msg.data);
                 }
             }
-        } else if msg.data.len() <= 1 {
-            self.inputing = true;
-            println!("inputing on");
         }
     }
  }
@@ -225,17 +327,38 @@ impl Handler<UpdateWorld> for LunaciaWorldActor {
         if let Some(resources) = &mut self.resources {
             if let Some(schedule) = &mut self.schedule {
                 if let Some(world) = &mut self.world {
-                    if self.inputs.len() > 0 {
-                        println!("Got {:?} inputs", self.inputs.len());
-                        for input in &self.inputs {
-                            println!("input: {:?}", input.data);
-                        }
-                        
-                        self.inputs.clear();
 
-                        let act = IOWorldActior::from_registry();
-                        act.do_send(WorldPong);
+                    if self.inputs.len() > 0 {
+                        let mut input_axies = Vec::new();
+                        let mut input_get_states = Vec::new();
+                        for input in &self.inputs {
+                            match input {
+                                PlayerInputRequest::GatherResource{request_id, owner, axie_index} => {
+                                    input_axies.push((PlayerInput{request_id: *request_id, owner: *owner, status: 0}, PlayerInputAxie{axie_index: *axie_index}, PlayerInputAxieGatherResource{resource_id: 1}))
+                                },
+                                PlayerInputRequest::GetPlayerState{request_id, owner} => {
+                                    input_get_states.push((PlayerInput{request_id: *request_id, owner: *owner, status: 0}, PlayerInputGetStateAroundLand(0, 0)))
+                                },
+                                _ => {}
+                            }
+                        }
+                        self.inputs.clear();
+                        if input_axies.len() > 0 {
+                            world.insert(
+                                (),
+                                input_axies
+                            );
+                        }
+                        if input_get_states.len() > 0 {
+                            world.insert(
+                                (),
+                                input_get_states
+                            );
+                        }
                     }
+                    
+                
+
 
                     let mut now_ms : u128 = 0;
                     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -253,14 +376,7 @@ impl Handler<UpdateWorld> for LunaciaWorldActor {
                     self.accumulated_time += dt_time;
 
                     while self.accumulated_time >= self.fixed_time_step as u128 {
-                        let mut quadrant_data = QuadrantDataHashMapResource(HashMap::new());
-
-                        resources.insert(quadrant_data);
-                        
                         schedule.execute(world, resources);
-
-                        let hm : Option<QuadrantDataHashMapResource> = resources.remove();
-
                         self.accumulated_time -= self.fixed_time_step as u128;
                     }
                 };

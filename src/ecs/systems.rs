@@ -4,6 +4,7 @@ use crate::ecs::types::{*};
 use crate::ecs::components::{*};
 use astar::astar;
 use legion::prelude::*;
+use std::collections::HashMap;
 
 pub fn build_update_chimera_spawners() -> Box<dyn Schedulable>  {
     SystemBuilder::new("update_chimera_spawners")
@@ -169,12 +170,12 @@ pub fn build_set_quadrant_data_hash_map() -> Box<dyn Schedulable>  {
         .build(|_, mut world, (conf), query| {
             let hm = &mut conf.0;
         
-            for (pos) in query.iter_mut(&mut world) {
+            for (entity, (pos)) in query.iter_entities(&mut world) {
                 //let v_pos = Vector2::new(pos.0 as f64, pos.1 as f64);
                 let hash_map_key = pos.get_hash_map_key();
                 hm.entry(hash_map_key)
                     .or_insert_with(Vec::new)
-                    .push((pos.0, pos.1));
+                    .push((entity.index(), pos.0, pos.1,));
             }
         })
 }
@@ -207,6 +208,7 @@ pub fn build_gather_resource_goals() -> Box<dyn Schedulable>  {
                     _ => {
                         println!("Done GatherResourceGoal");
                         command_buffer.remove_component::<GatherResourceGoal>(entity);
+                        command_buffer.remove_tag::<GGoal>(entity);
                     }
                 }
                 
@@ -238,6 +240,21 @@ pub fn build_release_resource_actions() -> Box<dyn Schedulable>  {
             for (mut entity, (mut action)) in query.iter_entities_mut(&mut world) {
                 command_buffer.remove_tag::<GActionReleaseResource>(entity);
                 command_buffer.remove_component::<GAction>(entity);
+            }
+        })
+}
+
+pub fn build_player_input_cleans() -> Box<dyn Schedulable>  {
+    SystemBuilder::new("build_player_input_cleans")
+        .with_query(<(Read<PlayerInput>)>::query())
+        .build(move |command_buffer, mut world, (res0), query| {
+            for (mut entity, (pi)) in query.iter_entities_mut(&mut world) {
+                match &pi.status {
+                    1 => {
+                        command_buffer.delete(entity);
+                    },
+                    _ => ()
+                }
             }
         })
 }

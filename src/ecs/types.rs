@@ -2,6 +2,7 @@ use super::*;
 // use crate::submap::{TileMap};
 use crate::ecs::submap::{*};
 use std::collections::HashMap;
+use std::collections::VecDeque;
 
 #[derive(Clone)]
 pub struct GameConfigResource {
@@ -12,7 +13,7 @@ pub struct GameConfigResource {
 }
 
 #[derive(Clone)]
-pub struct QuadrantDataHashMapResource(pub HashMap <i32, Vec<(i32, i32)>>);
+pub struct QuadrantDataHashMapResource(pub HashMap <i32, Vec<(u32, i32, i32)>>);
 
 #[derive(Clone)]
 pub struct TileMapResource(pub TileMap);
@@ -47,4 +48,17 @@ pub enum LunaciaWorldEvent {
         tx: i32,
         ty: i32,
     }
+}
+
+
+#[derive(Clone)]
+pub enum PlayerInputRequest {
+    GetPlayerState {request_id:u32, owner: u32},
+    GatherResource {
+        request_id:u32, 
+        owner: u32,
+        axie_index: u32,
+        // tx: i32,
+        // ty: i32,
+    },
 }

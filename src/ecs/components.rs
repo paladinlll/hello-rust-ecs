@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LandPos(pub i32, pub i32);
@@ -41,6 +41,10 @@ pub enum UnitModelType {
     Axie,
     Chimera,
 }
+
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Owner(pub u32);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UnitModel(pub i32);
@@ -136,25 +140,32 @@ impl GAction {
     }
 }
 
-// #[derive(Clone, Debug, PartialEq)]
-// pub struct GAgent{
-//     pub action_queue: VecDeque<GAction>,
-//     pub current_action: Option<GAction>,
-// }
-
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GatherResourceAction {
-    pub action: GAction
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ReleaseResourceAction {
-    pub action: GAction
-}
+pub struct GGoal;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GatherResourceGoal {
     pub step: i32,
     pub home_pos: LandPos,
     pub target_pos: LandPos
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlayerInput{
+    pub owner: u32,
+    pub request_id: u32,
+    pub status: u32, //0: requesting, 1: responsed, _:will delete
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlayerInputGetStateAroundLand(pub i32, pub i32);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlayerInputAxie{
+    pub axie_index: u32
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlayerInputAxieGatherResource{
+    pub resource_id: u32
 }
