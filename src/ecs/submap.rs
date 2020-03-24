@@ -18,6 +18,10 @@ impl TileMap {
         TileMap {w, h, data}
     }
 
+    fn get_tile_value(&self, pos: &(i32, i32)) -> u8 {
+        self.data[pos.1 as usize][pos.0 as usize]
+    }
+
     pub fn load_map(&mut self) -> std::io::Result<()>  {
         let mut file_sub_map = File::open("sub-map.bin")?;
         // read the same file back into a Vec of bytes
@@ -60,24 +64,37 @@ impl TileMap {
     pub fn is_alley_tile(&self, pos: &(i32, i32)) -> bool {
         let tile = self.data[pos.1 as usize][pos.0 as usize];
         match tile {
-            10 => true,
+            11 => true,
             _ => false
         }
     }
 
     pub fn is_deadend_tile(&self, pos: &(i32, i32)) -> bool {
-        let tile = self.data[pos.1 as usize][pos.0 as usize];
+        let tile = self.get_tile_value(pos);
+        //println!("is_deadend_tile  {:?} {:?}: {:?}", pos.0, pos.1, tile);
         match tile {
             6 => false,
-            10 => false,
+            11 => false,
             _ => true
         }
     }
 
-    pub fn can_move_to(&self, pos: &(i32, i32)) -> bool {
-        if !self.is_deadend_tile(pos) {
-            return true;
+    pub fn is_resource_tile(&self, pos: &(i32, i32)) -> bool {
+        let tile = self.data[pos.1 as usize][pos.0 as usize];
+        match tile {
+            8 => true,
+            _ => false
         }
+    }
+
+    pub fn can_move_to(&self, pos: &(i32, i32)) -> bool {
+        let tile = self.get_tile_value(pos);
+        if tile == 0 {
+            return false;
+        }
+        // if !self.is_deadend_tile(pos) {
+        //     return true;
+        // }
         let &(x, y) = pos;
         if !self.is_deadend_tile(&(x - 1, y)) {
             return true;
@@ -101,15 +118,16 @@ impl TileMap {
             _ => 5
         }
     }
+    
 
     pub fn successors(&self, pos: &(i32, i32)) -> Vec<((i32, i32), u32)> {
-        let tile = self.data[pos.1 as usize][pos.0 as usize];
-        if self.is_deadend_tile(pos) {
-            ()
+        let tile = self.get_tile_value(pos);
+        // println!("successors  {:?} {:?}: {:?}", pos.0, pos.1, tile);
+        match tile{
+            0 => {Vec::new()},
+            _ => {vec![(pos.0 - 1, pos.1), (pos.0 + 1, pos.1), (pos.0, pos.1 - 1), (pos.0, pos.1 + 1)]
+                .into_iter().map(|p| (p, self.get_move_cost(&p))).collect()}
         }
-
-        vec![(pos.0 - 1, pos.1), (pos.0 + 1, pos.1), (pos.0, pos.1 - 1), (pos.0, pos.1 + 1)]
-            .into_iter().map(|p| (p, self.get_move_cost(&p))).collect()
     }
 }
 

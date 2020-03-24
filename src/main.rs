@@ -105,6 +105,7 @@ impl MyWebSocket {
 }
 
 fn main() {
+    let _ = tracing_subscriber::fmt::try_init();
     // initialize system
     let code = System::run(|| {
         Arbiter::new().exec_fn(|| {

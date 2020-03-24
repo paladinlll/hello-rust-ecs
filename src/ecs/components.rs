@@ -5,13 +5,48 @@ pub struct LandPos(pub i32, pub i32);
 
 impl LandPos {
     pub fn get_hash_map_key(&self) -> i32  {
-        let ret = (self.0 / 3) as i32 + 1000 * ((self.0 / 3) as i32);
+        let ret = (self.0 / 6) as i32 + 1000 * ((self.1 / 6) as i32);
         (ret)
     }
 
     pub fn distance(&self, other: &LandPos) -> u32 {
         ((self.0 - other.0).abs() + (self.1 - other.1).abs()) as u32
-      }
+    }
+
+    pub fn get_hash_map_key_successors(&self, range: u32) -> Vec<i32> {
+        let mut lst = Vec::<i32>::new();
+        let i_range = range as i32;
+        for y in -i_range..=i_range {
+            for x in -i_range..=i_range {
+                let lp = LandPos(self.0 + x * 6, self.1 + y * 6);
+                // println!("{:?}, {:?} = {:?}", lp.0, lp.1, lp.get_hash_map_key());
+                lst.push(lp.get_hash_map_key());
+            }
+        }
+        (lst)
+    }
+
+    pub fn get_hash_map_key_successors_at_radius(&self, range: u32) -> Vec<i32> {
+        let mut lst = Vec::<i32>::new();
+        let i_range = range as i32;
+
+        let mut x = -i_range;
+        while x <= i_range {
+            lst.push(LandPos(self.0 + x * 6, self.1 - i_range * 6).get_hash_map_key());
+            lst.push(LandPos(self.0 + x * 6, self.1 + i_range * 6).get_hash_map_key());
+
+            x += 1;
+        }
+
+        let mut y = -(i_range - 1);
+        while y <= (i_range - 1) {
+            lst.push(LandPos(self.0 - i_range * 6, self.1 - y * 6).get_hash_map_key());
+            lst.push(LandPos(self.0 + i_range * 6, self.1 + y * 6).get_hash_map_key());
+
+            y += 1;
+        }
+        (lst)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -37,25 +72,30 @@ impl Moving {
 }
 
 pub enum UnitModelType {
-    None,
+    None = 0,
     Axie,
     Chimera,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct QuadrantKey(pub i32);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HomeLand(pub LandPos);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Owner(pub u32);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct UnitModel(pub i32);
-
-pub enum BuildingModelType {
-    None,
-    ResourceNode,
-}
+pub struct Model(pub u32);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct BuildingModel(pub i32);
+pub struct AutoCollect;
+
+pub enum BuildingModelType {
+    None = 1000,
+    ResourceNode,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ResourceNode;
@@ -74,6 +114,8 @@ pub struct ChimeraState {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FollowPath {
     //pub state: i32 //0: none, 1: request path, 2: moving, 3:finished,
+    pub sx: i32,
+    pub sy: i32,
     pub tx: i32,
     pub ty: i32,
 }

@@ -3,17 +3,41 @@ use super::*;
 use crate::ecs::submap::{*};
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use legion::prelude::{Entity};
 
 #[derive(Clone)]
 pub struct GameConfigResource {
     pub number_of_updates: u32,
     pub fixed_time_ms: u64,
     pub map_width: usize,
-    pub map_height: usize
+    pub map_height: usize,
+    pub tmp_focusing_pos: (i32, i32)
 }
 
+
 #[derive(Clone)]
-pub struct QuadrantDataHashMapResource(pub HashMap <i32, Vec<(u32, i32, i32)>>);
+pub struct QuadrantData {
+    pub model: u32,
+    pub land_pos: (i32, i32),
+}
+
+
+
+#[derive(Clone)]
+pub struct QuadrantDataHashMapResource(
+    pub HashMap <
+        i32, 
+        HashMap <u32, Vec<(Entity, QuadrantData)>>
+    >
+);
+
+#[derive(Clone)]
+pub struct PathwayHashMapResource(
+    pub HashMap <
+        ((i32, i32), (i32, i32)), 
+        Vec<(i32, i32)>
+    >
+);
 
 #[derive(Clone)]
 pub struct TileMapResource(pub TileMap);
@@ -30,7 +54,7 @@ pub struct TileMapResource(pub TileMap);
 // }
 
 #[derive(Clone)]
-pub struct EmitEventResource(pub Vec<LunaciaWorldEvent>);
+pub struct EmitEventResource(pub Vec<(i32, LunaciaWorldEvent)>);
 
 #[derive(Clone)]
 pub enum LunaciaWorldEvent {
@@ -53,7 +77,12 @@ pub enum LunaciaWorldEvent {
 
 #[derive(Clone)]
 pub enum PlayerInputRequest {
-    GetPlayerState {request_id:u32, owner: u32},
+    GetPlayerState {
+        request_id:u32, 
+        owner: u32,
+        tx: i32,
+        ty: i32,
+    },
     GatherResource {
         request_id:u32, 
         owner: u32,
